@@ -5,6 +5,6 @@ use anchor_lang::prelude::*;
 pub struct Escrow {
     pub seed: u64,
     pub maker: Pubkey,
-    pub receive: u64,
+    pub amount: u64,
     pub bump: u8,
 }

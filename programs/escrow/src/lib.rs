@@ -13,16 +13,14 @@ declare_id!("3V5tgL8vxgC3jKiyXxAzmdkkCi8sTs1TMwfvLiNpBMXx");
 pub mod escrow {
     use super::*;
 
-    /// Creates an escrow account and deposits SOL into it
     pub fn make(ctx: Context<Make>, seed: u64, amount: u64) -> Result<()> {
-        // Save escrow metadata in the account
-        ctx.accounts.save_escrow(seed, ctx.bumps.get("escrow").ok_or(ErrorCode::MissingBump)?)?;
-        
-        // Deposit the specified amount of SOL into the escrow account
+        ctx.accounts.save_escrow(
+            seed,
+            ctx.bumps.escrow
+        )?;
         ctx.accounts.deposit(amount)
     }
 
-    /// Allows the taker to withdraw SOL from the escrow and closes the escrow account
     pub fn take(ctx: Context<Take>) -> Result<()> {
         // Withdraw SOL to the maker
         ctx.accounts.withdraw_and_close()

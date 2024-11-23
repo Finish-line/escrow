@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+use crate::Escrow;
 #[derive(Accounts)]
 pub struct Take<'info> {
     /// The taker who will withdraw funds

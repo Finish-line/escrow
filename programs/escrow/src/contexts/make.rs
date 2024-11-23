@@ -15,7 +15,6 @@ pub struct Make<'info> {
     #[account(mut)]
     maker: Signer<'info>,
 
-    /// Escrow account for holding SOL
     #[account(
         init,
         payer = maker,
@@ -29,22 +28,19 @@ pub struct Make<'info> {
 }
 
 impl<'info> Make<'info> {
-    /// Initialize and save the escrow account with the SOL deposit
     pub fn save_escrow(&mut self, seed: u64, bump: u8) -> Result<()> {
         self.escrow.set_inner(Escrow {
             seed,
             maker: self.maker.key(),
-            balance: 0, // Initial balance is 0; will be updated upon deposit
+            amount: 0, 
             bump,
         });
         Ok(())
     }
 
-    /// Deposit SOL from the maker into the escrow account
     pub fn deposit(&mut self, lamports: u64) -> Result<()> {
         let escrow_account = &mut self.escrow;
 
-        // Transfer SOL from maker to the escrow PDA
         let cpi_context = CpiContext::new(
             self.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
@@ -55,8 +51,7 @@ impl<'info> Make<'info> {
 
         anchor_lang::system_program::transfer(cpi_context, lamports)?;
 
-        // Update escrow balance
-        escrow_account.balance += lamports;
+        escrow_account.amount += lamports;
 
         Ok(())
     }
