@@ -7,7 +7,7 @@ mod state;
 use state::*;
 
 // TODO: Update with your actual program ID
-declare_id!("3V5tgL8vxgC3jKiyXxAzmdkkCi8sTs1TMwfvLiNpBMXx");
+declare_id!("PNTWiYwAX4bT9pYdH2YpLaFL1ntfnS9CtkeUeKYwFks");
 
 #[program]
 pub mod escrow {
@@ -22,7 +22,6 @@ pub mod escrow {
     }
 
     pub fn take(ctx: Context<Take>) -> Result<()> {
-        // Withdraw SOL to the maker
         ctx.accounts.withdraw_and_close()
     }
 
