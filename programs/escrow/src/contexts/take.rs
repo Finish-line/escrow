@@ -1,115 +1,43 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked, CloseAccount, close_account}};
-use crate::Escrow;
 
 #[derive(Accounts)]
-pub struct Take<'info> { 
+pub struct Take<'info> {
+    /// The taker who will withdraw funds
     #[account(mut)]
     taker: Signer<'info>,
+
+    /// The maker who created the escrow
     #[account(mut)]
     maker: SystemAccount<'info>,
-    #[account(
-        mint::token_program = token_program
-    )]
-    mint_a: Box<InterfaceAccount<'info, Mint>>,
-    #[account(
-        mint::token_program = token_program
-    )]
-    mint_b: Box<InterfaceAccount<'info, Mint>>,
-    #[account(
-        init_if_needed,
-        payer = taker,
-        associated_token::mint = mint_a,
-        associated_token::authority = taker,
-        associated_token::token_program = token_program
-    )]
-    taker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        associated_token::mint = mint_b,
-        associated_token::authority = taker,
-        associated_token::token_program = token_program
-    )]
-    taker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        init_if_needed,
-        payer = taker,
-        associated_token::mint = mint_b,
-        associated_token::authority = maker,
-        associated_token::token_program = token_program
-    )]
-    maker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The escrow account storing the SOL and metadata
     #[account(
         mut,
         close = taker,
         has_one = maker,
-        has_one = mint_a,
-        has_one = mint_b,
-        seeds=[b"escrow", maker.key.as_ref(), escrow.seed.to_le_bytes().as_ref()],
+        seeds = [b"escrow", maker.key.as_ref(), escrow.seed.to_le_bytes().as_ref()],
         bump = escrow.bump,
     )]
     escrow: Account<'info, Escrow>,
-    #[account(
-        mut,
-        associated_token::mint = mint_a,
-        associated_token::authority = escrow,
-        associated_token::token_program = token_program
-    )]
-    vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    associated_token_program: Program<'info, AssociatedToken>,
-    token_program: Interface<'info, TokenInterface>,
+
+    /// The system program for transferring SOL
     system_program: Program<'info, System>,
 }
 
 impl<'info> Take<'info> {
-    pub fn transfer_to_maker(&mut self) -> Result<()> {
-        let accounts = TransferChecked {
-            from: self.taker_ata_b.to_account_info(),
-            mint:  self.mint_b.to_account_info(),
-            to: self.maker_ata_b.to_account_info(),
-            authority: self.taker.to_account_info(),
-        };
-        
-        let cpi_ctx = CpiContext::new(
-            self.token_program.to_account_info(),
-            accounts
-        );
-
-        transfer_checked(cpi_ctx, self.escrow.receive, self.mint_b.decimals)
-    }
-
+    /// Withdraw all SOL from the escrow and close it
     pub fn withdraw_and_close(&mut self) -> Result<()> {
-        msg!("withdraw_and_close started");
-        let seed = self.escrow.seed.to_le_bytes();
-        let bump = [self.escrow.bump];
-        let signer_seeds = [&[b"escrow", self.maker.to_account_info().key.as_ref(), &seed.as_ref(), &bump][..]];
-        let accounts = TransferChecked {
-            to: self.taker_ata_a.to_account_info(),
-            mint:  self.mint_a.to_account_info(),
-            from: self.vault.to_account_info(),
-            authority: self.escrow.to_account_info(),
-        };
-        
-        let ctx = CpiContext::new_with_signer(
-            self.token_program.to_account_info(),
-            accounts,
-            &signer_seeds
-        );
+        msg!("Withdrawing funds from escrow and closing it");
 
-        transfer_checked(ctx, self.vault.amount, self.mint_a.decimals)?;
+        // Transfer all SOL from escrow to taker
+        let escrow_balance = self.escrow.to_account_info().lamports();
+        **self.escrow.to_account_info().try_borrow_mut_lamports()? -= escrow_balance;
+        **self.taker.to_account_info().try_borrow_mut_lamports()? += escrow_balance;
 
-        let accounts = CloseAccount {
-            account: self.vault.to_account_info(),
-            destination: self.taker.to_account_info(),
-            authority: self.escrow.to_account_info(),
-        };
+        // Close escrow account by transferring rent exemption to the taker
+        self.escrow.close(self.taker.to_account_info())?;
 
-        let ctx = CpiContext::new_with_signer(
-            self.token_program.to_account_info(),
-            accounts,
-            &signer_seeds
-        );
-
-        close_account(ctx)
+        msg!("Escrow closed successfully");
+        Ok(())
     }
 }
